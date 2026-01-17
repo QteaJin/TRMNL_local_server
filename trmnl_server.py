@@ -111,79 +111,41 @@ async def api_display(request: Request,
                       force_update: Optional[bool] = False,
                       firmware_version: Optional[str] = None,
                       maximum_compatibility_override: Optional[bool] = None):
-    """Return display instructions. Use query params to simulate behavior:
-       - ?redirect=1 to get a 307 with Location
-       - ?status_override=429 to change status
-       - ?no_content=1 to return 204 No Content
-       - ?force_update=1&firmware_version=1.2.3 to request device to update firmware
+    """Модифицированная версия: форсирует обновление экрана"""
 
-    Headers received from device (automatically converted from HTTP header names):
-    - id (from "ID")
-    - access_token (from "Access-Token")
-    - refresh_rate (from "Refresh-Rate")
-    - battery_voltage (from "Battery-Voltage")
-    - fw_version (from "FW-Version")
-    - model (from "Model")
-    - rssi (from "RSSI")
-    - temperature_profile (from "temperature-profile")
-    - width (from "Width")
-    - height (from "Height")
-    - special_function (from "special_function")
-    """
-    # Log incoming request
+    # Логируем входящий запрос
     log_request_details(request, "GET /api/display", {
         "id": id,
         "access_token": access_token,
-        "refresh_rate": refresh_rate,
         "battery_voltage": battery_voltage,
         "fw_version": fw_version,
         "model": model,
-        "rssi": rssi,
-        "temperature_profile": temperature_profile,
-        "width": width,
-        "height": height,
-        "special_function": special_function,
-        "status_override": status_override,
-        "redirect": redirect,
-        "no_content": no_content,
-        "force_update": force_update,
-        "firmware_version": firmware_version,
-        "maximum_compatibility_override": maximum_compatibility_override
+        "status_override": status_override
     })
 
     if redirect:
-        # Simulate redirect to a new path (temporary redirect 307)
         url = str(request.url).rstrip("/") + "/redirected"
-        logger.info(f"RESPONSE STATUS: 307")
-        logger.info(f"Location: {url}")
-        logger.info(f"{'=' * 80}\n")
+        logger.info(f"RESPONSE STATUS: 307\nLocation: {url}\n{'=' * 80}\n")
         return RedirectResponse(url=url, status_code=307)
 
     if no_content:
-        response_body = {"result": "ok"}
-        return JSONResponse(status_code=200, content=response_body)
+        return JSONResponse(status_code=200, content={"result": "ok"})
 
     status_code = status_override or 200
 
-    # Decide if device should update firmware
-    update_firmware = False
-    firmware_url = ""
-    if force_update:
-        update_firmware = True
-        fv = firmware_version or "1.0.0"
-        # Use base_url so host/port and scheme are correct
-        firmware_url = str(request.base_url).rstrip("/") + f"/firmware/{fv}/firmware.bin"
+    # Генерируем уникальное имя файла (timestamp), чтобы ESP32 не проигнорировала обновление
+    unique_filename = f"refresh_{datetime.now().strftime('%H%M%S')}"
 
     content = {
         "status": status_code,
         "image_url": str(request.base_url).rstrip("/") + "/images/display.bmp",
         "image_url_timeout": 60,
-        "filename": "example_display",
-        "update_firmware": update_firmware,
-        "maximum_compatibility": True if maximum_compatibility_override is None else bool(
-            maximum_compatibility_override),
-        "firmware_url": firmware_url,
+        "filename": unique_filename,  # Ключевое изменение
+        "update_firmware": force_update,
+        "maximum_compatibility": False,  # Для S3 ставим False для надежности
+        "firmware_url": "",
         "refresh_rate": refresh_rate or 60,
+        "battery_voltage": 4.20,  # Обманываем проверку заряда (4.2V = 100%)
         "temperature_profile": temperature_profile or "default",
         "reset_firmware": False,
         "special_function": special_function or "",
@@ -192,6 +154,107 @@ async def api_display(request: Request,
 
     log_response_details("GET /api/display", 200, content)
     return JSONResponse(status_code=200, content=content)
+
+# @app.get("/api/display")
+# async def api_display(request: Request,
+#                       id: Optional[str] = Header(None),
+#                       access_token: Optional[str] = Header(None),
+#                       refresh_rate: Optional[int] = Header(None),
+#                       battery_voltage: Optional[float] = Header(None),
+#                       fw_version: Optional[str] = Header(None),
+#                       model: Optional[str] = Header(None),
+#                       rssi: Optional[int] = Header(None),
+#                       temperature_profile: Optional[str] = Header(None),
+#                       width: Optional[int] = Header(None),
+#                       height: Optional[int] = Header(None),
+#                       special_function: Optional[str] = Header(None),
+#                       status_override: Optional[int] = None,
+#                       redirect: Optional[bool] = False,
+#                       no_content: Optional[bool] = False,
+#                       force_update: Optional[bool] = False,
+#                       firmware_version: Optional[str] = None,
+#                       maximum_compatibility_override: Optional[bool] = None):
+#     """Return display instructions. Use query params to simulate behavior:
+#        - ?redirect=1 to get a 307 with Location
+#        - ?status_override=429 to change status
+#        - ?no_content=1 to return 204 No Content
+#        - ?force_update=1&firmware_version=1.2.3 to request device to update firmware
+#
+#     Headers received from device (automatically converted from HTTP header names):
+#     - id (from "ID")
+#     - access_token (from "Access-Token")
+#     - refresh_rate (from "Refresh-Rate")
+#     - battery_voltage (from "Battery-Voltage")
+#     - fw_version (from "FW-Version")
+#     - model (from "Model")
+#     - rssi (from "RSSI")
+#     - temperature_profile (from "temperature-profile")
+#     - width (from "Width")
+#     - height (from "Height")
+#     - special_function (from "special_function")
+#     """
+#     # Log incoming request
+#     log_request_details(request, "GET /api/display", {
+#         "id": id,
+#         "access_token": access_token,
+#         "refresh_rate": refresh_rate,
+#         "battery_voltage": battery_voltage,
+#         "fw_version": fw_version,
+#         "model": model,
+#         "rssi": rssi,
+#         "temperature_profile": temperature_profile,
+#         "width": width,
+#         "height": height,
+#         "special_function": special_function,
+#         "status_override": status_override,
+#         "redirect": redirect,
+#         "no_content": no_content,
+#         "force_update": force_update,
+#         "firmware_version": firmware_version,
+#         "maximum_compatibility_override": maximum_compatibility_override
+#     })
+#
+#     if redirect:
+#         # Simulate redirect to a new path (temporary redirect 307)
+#         url = str(request.url).rstrip("/") + "/redirected"
+#         logger.info(f"RESPONSE STATUS: 307")
+#         logger.info(f"Location: {url}")
+#         logger.info(f"{'=' * 80}\n")
+#         return RedirectResponse(url=url, status_code=307)
+#
+#     if no_content:
+#         response_body = {"result": "ok"}
+#         return JSONResponse(status_code=200, content=response_body)
+#
+#     status_code = status_override or 200
+#
+#     # Decide if device should update firmware
+#     update_firmware = False
+#     firmware_url = ""
+#     if force_update:
+#         update_firmware = True
+#         fv = firmware_version or "1.0.0"
+#         # Use base_url so host/port and scheme are correct
+#         firmware_url = str(request.base_url).rstrip("/") + f"/firmware/{fv}/firmware.bin"
+#
+#     content = {
+#         "status": status_code,
+#         "image_url": str(request.base_url).rstrip("/") + "/images/display.bmp",
+#         "image_url_timeout": 60,
+#         "filename": "example_display",
+#         "update_firmware": update_firmware,
+#         "maximum_compatibility": True if maximum_compatibility_override is None else bool(
+#             maximum_compatibility_override),
+#         "firmware_url": firmware_url,
+#         "refresh_rate": refresh_rate or 60,
+#         "temperature_profile": temperature_profile or "default",
+#         "reset_firmware": False,
+#         "special_function": special_function or "",
+#         "action": "refresh"
+#     }
+#
+#     log_response_details("GET /api/display", 200, content)
+#     return JSONResponse(status_code=200, content=content)
 
 
 @app.post("/api/log")
