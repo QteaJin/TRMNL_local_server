@@ -20,6 +20,21 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="TRMNL Local API Mock")
 
+# --- Конфигурация генерации изображения ---
+IMAGE_WIDTH = 800
+IMAGE_HEIGHT = 480
+FONT_SIZE = 60
+FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" # Путь к системному шрифту на Raspberry Pi
+# Если DejaVuSans-Bold.ttf не найден, замените на другой или загрузите
+# Например, можно скачать с Google Fonts и положить рядом с trmnl_server.py:
+# FONT_PATH = "arial.ttf"
+
+# Часовой пояс (например, 'Europe/Moscow'). Замените на свой, если нужно.
+# Список доступных часовых поясов можно найти тут:
+# https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+TIMEZONE = 'Europe/Moscow'
+local_tz = pytz.timezone(TIMEZONE)
+
 
 def log_request_details(request: Request, endpoint_name: str, received_headers: dict):
     """Log full request details including headers for debugging"""
