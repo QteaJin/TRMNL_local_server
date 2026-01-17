@@ -6,6 +6,7 @@ import logging
 import json
 from PIL import Image, ImageDraw, ImageFont
 from datetime import datetime
+import pytz # Для работы с часовыми поясами
 
 # Configure logging
 logging.basicConfig(
