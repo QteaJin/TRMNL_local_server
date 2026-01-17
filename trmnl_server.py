@@ -354,50 +354,29 @@ from fastapi import HTTPException
 # Create images directory if it doesn't exist
 os.makedirs("images", exist_ok=True)
 
+
 @app.get("/images/{name}")
 async def serve_image(name: str, request: Request):
+    """
+    Просто отдает файл из папки /images по его имени.
+    """
     log_request_details(request, f"GET /images/{{name}}", {"name": name})
 
-    # Security check
+    # Защита от попыток выйти за пределы папки
     if '..' in name or name.startswith('/'):
         raise HTTPException(status_code=400, detail="Invalid filename")
 
-    if name != "display.bmp":
-        raise HTTPException(status_code=404, detail="Image not found")
-
-    os.makedirs("images", exist_ok=True)
+    # Путь к файлу на диске
     image_path = os.path.join("images", name)
 
-    # --- Create image ---
-    width, height = 800, 480
-    img = Image.new("1", (width, height), 1)  # white background
-    draw = ImageDraw.Draw(img)
+    # Проверяем, существует ли файл
+    if os.path.exists(image_path):
+        logger.info(f"Файл найден, отправляю: {image_path}")
+        return FileResponse(image_path, media_type="image/bmp")
 
-    current_time = datetime.now().strftime("%H:%M:%S")
-
-    try:
-        font = ImageFont.truetype("arial.ttf", 120)
-    except IOError:
-        font = ImageFont.load_default()
-
-    text_bbox = draw.textbbox((0, 0), current_time, font=font)
-    text_width = text_bbox[2] - text_bbox[0]
-    text_height = text_bbox[3] - text_bbox[1]
-
-    x = (width - text_width) // 2
-    y = (height - text_height) // 2
-
-    draw.text((x, y), current_time, fill=0, font=font)  # black text
-
-    img.save(image_path, "BMP")
-
-    log_response_details(
-        f"GET /images/{{name}}",
-        200,
-        {"image": name, "generated": current_time}
-    )
-
-    return FileResponse(image_path, media_type="image/bmp")
+    # Если файла нет
+    logger.error(f"Файл НЕ найден: {image_path}")
+    raise HTTPException(status_code=404, detail="Image not found on disk")
 
 
 if __name__ == "__main__":
