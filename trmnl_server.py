@@ -92,129 +92,81 @@ async def api_setup(request: Request,
     return response_body
 
 
+# --- Функция для генерации BMP с текущим временем ---
+def generate_time_image():
+    try:
+        # Создаем новое черно-белое изображение
+        img = Image.new('1', (IMAGE_WIDTH, IMAGE_HEIGHT), color=255)  # 255 = белый фон
+        draw = ImageDraw.Draw(img)
+
+        # Загружаем шрифт
+        try:
+            font = ImageFont.truetype(FONT_PATH, FONT_SIZE)
+        except IOError:
+            logger.warning(f"Шрифт {FONT_PATH} не найден. Использую шрифт по умолчанию.")
+            font = ImageFont.load_default()
+
+        # Получаем текущее время в заданном часовом поясе
+        now_utc = datetime.utcnow().replace(tzinfo=pytz.utc)
+        now_local = now_utc.astimezone(local_tz)
+
+        time_str = now_local.strftime("%H:%M:%S")
+        date_str = now_local.strftime("%Y-%m-%d")
+
+        # Определяем размеры текста
+        bbox_time = draw.textbbox((0, 0), time_str, font=font)
+        text_width_time = bbox_time[2] - bbox_time[0]
+        text_height_time = bbox_time[3] - bbox_time[1]
+
+        bbox_date = draw.textbbox((0, 0), date_str, font=font)
+        text_width_date = bbox_date[2] - bbox_date[0]
+        text_height_date = bbox_date[3] - bbox_date[1]
+
+        # Центрируем текст
+        x_time = (IMAGE_WIDTH - text_width_time) / 2
+        y_time = (IMAGE_HEIGHT - text_height_time) / 2 - text_height_date / 2  # Чуть выше центра для времени
+
+        x_date = (IMAGE_WIDTH - text_width_date) / 2
+        y_date = (IMAGE_HEIGHT - text_height_date) / 2 + text_height_time / 2  # Чуть ниже центра для даты
+
+        # Рисуем текст черным цветом (0)
+        draw.text((x_time, y_time), time_str, font=font, fill=0)
+        draw.text((x_date, y_date), date_str, font=font, fill=0)
+
+        # Сохраняем изображение в BMP формате
+        img.save(last_generated_image_path)
+        logger.info(f"Сгенерировано новое изображение: {last_generated_image_path}")
+    except Exception as e:
+        logger.error(f"Ошибка при генерации изображения: {e}")
+        # В случае ошибки, убедимся, что файл display.bmp существует, даже если он пустой
+        if not os.path.exists(last_generated_image_path):
+            Image.new('1', (IMAGE_WIDTH, IMAGE_HEIGHT), color=0).save(last_generated_image_path)
+
+
 @app.get("/api/display")
 async def api_display(request: Request,
                       id: Optional[str] = Header(None),
                       access_token: Optional[str] = Header(None)):
     log_request_details(request, "GET /api/display", {"id": id})
 
-    # Генерируем уникальный filename, как в примере (ISO формат или просто строка)
-    unique_filename = f"img_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    # Генерируем новое изображение перед каждым запросом display
+    generate_time_image()
 
-    # Строго по документации TRMNL:
+    # Генерируем новый ID файла, чтобы заставить ESP32 обновить картинку
+    unique_filename = f"f_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+
     content = {
         "status": 0,  # КРИТИЧЕСКИ ВАЖНО: 0 вместо 200
-        "image_url": f"http://192.168.0.212:65111/images/display.bmp",
+        "image_url": f"{str(request.base_url).rstrip('/')}/images/display.bmp",
         "filename": unique_filename,
         "update_firmware": False,
         "firmware_url": None,
-        "refresh_rate": 60,  # сделаем пока 1 минуту для тестов
+        "refresh_rate": 60,  # Обновление каждые 60 секунд
         "reset_firmware": False
     }
 
-    log_response_details("GET /api/display", 200, content)  # HTTP код ответа остается 200
+    log_response_details("GET /api/display", 200, content)
     return JSONResponse(status_code=200, content=content)
-
-# @app.get("/api/display")
-# async def api_display(request: Request,
-#                       id: Optional[str] = Header(None),
-#                       access_token: Optional[str] = Header(None),
-#                       refresh_rate: Optional[int] = Header(None),
-#                       battery_voltage: Optional[float] = Header(None),
-#                       fw_version: Optional[str] = Header(None),
-#                       model: Optional[str] = Header(None),
-#                       rssi: Optional[int] = Header(None),
-#                       temperature_profile: Optional[str] = Header(None),
-#                       width: Optional[int] = Header(None),
-#                       height: Optional[int] = Header(None),
-#                       special_function: Optional[str] = Header(None),
-#                       status_override: Optional[int] = None,
-#                       redirect: Optional[bool] = False,
-#                       no_content: Optional[bool] = False,
-#                       force_update: Optional[bool] = False,
-#                       firmware_version: Optional[str] = None,
-#                       maximum_compatibility_override: Optional[bool] = None):
-#     """Return display instructions. Use query params to simulate behavior:
-#        - ?redirect=1 to get a 307 with Location
-#        - ?status_override=429 to change status
-#        - ?no_content=1 to return 204 No Content
-#        - ?force_update=1&firmware_version=1.2.3 to request device to update firmware
-#
-#     Headers received from device (automatically converted from HTTP header names):
-#     - id (from "ID")
-#     - access_token (from "Access-Token")
-#     - refresh_rate (from "Refresh-Rate")
-#     - battery_voltage (from "Battery-Voltage")
-#     - fw_version (from "FW-Version")
-#     - model (from "Model")
-#     - rssi (from "RSSI")
-#     - temperature_profile (from "temperature-profile")
-#     - width (from "Width")
-#     - height (from "Height")
-#     - special_function (from "special_function")
-#     """
-#     # Log incoming request
-#     log_request_details(request, "GET /api/display", {
-#         "id": id,
-#         "access_token": access_token,
-#         "refresh_rate": refresh_rate,
-#         "battery_voltage": battery_voltage,
-#         "fw_version": fw_version,
-#         "model": model,
-#         "rssi": rssi,
-#         "temperature_profile": temperature_profile,
-#         "width": width,
-#         "height": height,
-#         "special_function": special_function,
-#         "status_override": status_override,
-#         "redirect": redirect,
-#         "no_content": no_content,
-#         "force_update": force_update,
-#         "firmware_version": firmware_version,
-#         "maximum_compatibility_override": maximum_compatibility_override
-#     })
-#
-#     if redirect:
-#         # Simulate redirect to a new path (temporary redirect 307)
-#         url = str(request.url).rstrip("/") + "/redirected"
-#         logger.info(f"RESPONSE STATUS: 307")
-#         logger.info(f"Location: {url}")
-#         logger.info(f"{'=' * 80}\n")
-#         return RedirectResponse(url=url, status_code=307)
-#
-#     if no_content:
-#         response_body = {"result": "ok"}
-#         return JSONResponse(status_code=200, content=response_body)
-#
-#     status_code = status_override or 200
-#
-#     # Decide if device should update firmware
-#     update_firmware = False
-#     firmware_url = ""
-#     if force_update:
-#         update_firmware = True
-#         fv = firmware_version or "1.0.0"
-#         # Use base_url so host/port and scheme are correct
-#         firmware_url = str(request.base_url).rstrip("/") + f"/firmware/{fv}/firmware.bin"
-#
-#     content = {
-#         "status": status_code,
-#         "image_url": str(request.base_url).rstrip("/") + "/images/display.bmp",
-#         "image_url_timeout": 60,
-#         "filename": "example_display",
-#         "update_firmware": update_firmware,
-#         "maximum_compatibility": True if maximum_compatibility_override is None else bool(
-#             maximum_compatibility_override),
-#         "firmware_url": firmware_url,
-#         "refresh_rate": refresh_rate or 60,
-#         "temperature_profile": temperature_profile or "default",
-#         "reset_firmware": False,
-#         "special_function": special_function or "",
-#         "action": "refresh"
-#     }
-#
-#     log_response_details("GET /api/display", 200, content)
-#     return JSONResponse(status_code=200, content=content)
 
 
 @app.post("/api/log")
