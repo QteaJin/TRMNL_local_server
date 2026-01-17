@@ -98,24 +98,21 @@ async def api_display(request: Request,
                       access_token: Optional[str] = Header(None)):
     log_request_details(request, "GET /api/display", {"id": id})
 
-    # Генерируем новый ID файла, чтобы заставить ESP32 выйти из цикла "оно и так то же самое"
-    unique_filename = f"f_{datetime.now().strftime('%M%S')}"
+    # Генерируем уникальный filename, как в примере (ISO формат или просто строка)
+    unique_filename = f"img_{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
-    # Собираем максимально "чистый" JSON
+    # Строго по документации TRMNL:
     content = {
-        "status": 200,
+        "status": 0,  # КРИТИЧЕСКИ ВАЖНО: 0 вместо 200
         "image_url": f"http://192.168.0.212:65111/images/display.bmp",
-        "image_url_timeout": 60,
         "filename": unique_filename,
         "update_firmware": False,
-        "maximum_compatibility": False,
-        "firmware_url": "",
-        "refresh_rate": 60,
-        "battery_voltage": "4.20",  # Передаем как СТРОКУ
-        "action": "refresh"
+        "firmware_url": None,
+        "refresh_rate": 60,  # сделаем пока 1 минуту для тестов
+        "reset_firmware": False
     }
 
-    log_response_details("GET /api/display", 200, content)
+    log_response_details("GET /api/display", 200, content)  # HTTP код ответа остается 200
     return JSONResponse(status_code=200, content=content)
 
 # @app.get("/api/display")
