@@ -95,60 +95,23 @@ async def api_setup(request: Request,
 @app.get("/api/display")
 async def api_display(request: Request,
                       id: Optional[str] = Header(None),
-                      access_token: Optional[str] = Header(None),
-                      refresh_rate: Optional[int] = Header(None),
-                      battery_voltage: Optional[float] = Header(None),
-                      fw_version: Optional[str] = Header(None),
-                      model: Optional[str] = Header(None),
-                      rssi: Optional[int] = Header(None),
-                      temperature_profile: Optional[str] = Header(None),
-                      width: Optional[int] = Header(None),
-                      height: Optional[int] = Header(None),
-                      special_function: Optional[str] = Header(None),
-                      status_override: Optional[int] = None,
-                      redirect: Optional[bool] = False,
-                      no_content: Optional[bool] = False,
-                      force_update: Optional[bool] = False,
-                      firmware_version: Optional[str] = None,
-                      maximum_compatibility_override: Optional[bool] = None):
-    """Модифицированная версия: форсирует обновление экрана"""
+                      access_token: Optional[str] = Header(None)):
+    log_request_details(request, "GET /api/display", {"id": id})
 
-    # Логируем входящий запрос
-    log_request_details(request, "GET /api/display", {
-        "id": id,
-        "access_token": access_token,
-        "battery_voltage": battery_voltage,
-        "fw_version": fw_version,
-        "model": model,
-        "status_override": status_override
-    })
+    # Генерируем новый ID файла, чтобы заставить ESP32 выйти из цикла "оно и так то же самое"
+    unique_filename = f"f_{datetime.now().strftime('%M%S')}"
 
-    if redirect:
-        url = str(request.url).rstrip("/") + "/redirected"
-        logger.info(f"RESPONSE STATUS: 307\nLocation: {url}\n{'=' * 80}\n")
-        return RedirectResponse(url=url, status_code=307)
-
-    if no_content:
-        return JSONResponse(status_code=200, content={"result": "ok"})
-
-    status_code = status_override or 200
-
-    # Генерируем уникальное имя файла (timestamp), чтобы ESP32 не проигнорировала обновление
-    unique_filename = f"refresh_{datetime.now().strftime('%H%M%S')}"
-
+    # Собираем максимально "чистый" JSON
     content = {
-        "status": status_code,
-        "image_url": str(request.base_url).rstrip("/") + "/images/display.bmp",
+        "status": 200,
+        "image_url": f"http://192.168.0.212:65111/images/display.bmp",
         "image_url_timeout": 60,
-        "filename": unique_filename,  # Ключевое изменение
-        "update_firmware": force_update,
-        "maximum_compatibility": False,  # Для S3 ставим False для надежности
+        "filename": unique_filename,
+        "update_firmware": False,
+        "maximum_compatibility": False,
         "firmware_url": "",
-        "refresh_rate": refresh_rate or 60,
-        "battery_voltage": 4.20,  # Обманываем проверку заряда (4.2V = 100%)
-        "temperature_profile": temperature_profile or "default",
-        "reset_firmware": False,
-        "special_function": special_function or "",
+        "refresh_rate": 60,
+        "battery_voltage": "4.20",  # Передаем как СТРОКУ
         "action": "refresh"
     }
 
