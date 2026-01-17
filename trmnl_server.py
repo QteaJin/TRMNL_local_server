@@ -36,6 +36,18 @@ FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" # Путь к
 TIMEZONE = 'Europe/Moscow'
 local_tz = pytz.timezone(TIMEZONE)
 
+# --- Глобальные переменные для хранения последней сгенерированной картинки ---
+last_generated_image_path = "images/display.bmp"
+# Создадим пустой файл-заглушку, если его нет
+if not os.path.exists(last_generated_image_path):
+    try:
+        # Создаем просто черную картинку 800x480
+        img = Image.new('1', (800, 480), color=0)
+        img.save(last_generated_image_path)
+        logger.info(f"Создан пустой файл-заглушка: {last_generated_image_path}")
+    except Exception as e:
+        logger.error(f"Не удалось создать файл-заглушку {last_generated_image_path}: {e}")
+
 
 def log_request_details(request: Request, endpoint_name: str, received_headers: dict):
     """Log full request details including headers for debugging"""
